@@ -4,6 +4,7 @@ from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 from keep_alive import keep_alive
+from flask import Flask
 
 keep_alive()
 app = Flask(__name__)

@@ -5,6 +5,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 from keep_alive import keep_alive
 from flask import Flask
+import threading
 
 keep_alive()
 app = Flask(__name__)
@@ -34,17 +35,20 @@ async def on_ready():
     except Exception as e:
         print(f"Sync failed: {e}")
 
-@bot.tree.command(name="trackrecord-check", description="指定チャンネルのメッセージ数を表示します")
-async def trackrecord_check(interaction: discord.Interaction):
-    if interaction.channel_id != TRACK_CHANNEL_ID:
-        return await interaction.response.send_message("このコマンドは指定チャンネルでのみ実行できます。", ephemeral=True)
-
-    channel = interaction.guild.get_channel(TRACK_CHANNEL_ID)
+# ===== メッセージ数カウント =====
+@bot.tree.command(name="trackrecord-check", description="指定チャンネルまたは現在のチャンネルのメッセージ数を表示します")
+@app_commands.describe(channel="対象チャンネル（省略可）")
+async def trackrecord_check(interaction: discord.Interaction, channel: discord.TextChannel = None):
+    target_channel = channel or interaction.channel
     count = 0
-    async for _ in channel.history(limit=None):
+    async for _ in target_channel.history(limit=None):
         count += 1
 
-    embed = create_embed("実績数", f"**{count} 件**", discord.Color.green())
+    embed = create_embed(
+        "実績数",
+        f"**{target_channel.mention} のメッセージ数:** {count} 件",
+        discord.Color.green()
+    )
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # ===== ログ機能 =====
@@ -93,9 +97,12 @@ async def on_guild_channel_delete(channel):
     )
     await send_log(embed)
 
-bot.run(TOKEN)
-
-if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
+# ===== Flask + Bot 両立 =====
+def run_flask():
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
+if __name__ == "__main__":
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+    bot.run(TOKEN)
